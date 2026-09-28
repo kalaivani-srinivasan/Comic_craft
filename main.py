@@ -1,62 +1,95 @@
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from huggingface_hub import InferenceClient
-from dotenv import load_dotenv
-
-from fpdf import FPDF
+from PIL import Image, ImageDraw, ImageFont
 
 import os
+import textwrap
 
 
-load_dotenv()
+app = FastAPI(title="ComicCraft - AI Comic Story Creator")
 
-app = FastAPI()
+
+# =========================================================
+# FOLDERS
+# =========================================================
+
+STATIC_FOLDER = "static"
+IMAGE_FOLDER = os.path.join(STATIC_FOLDER, "images")
+TEMPLATE_FOLDER = "templates"
+
+os.makedirs(IMAGE_FOLDER, exist_ok=True)
+os.makedirs(TEMPLATE_FOLDER, exist_ok=True)
+
+
+# =========================================================
+# STATIC FILES
+# =========================================================
 
 app.mount(
     "/static",
-    StaticFiles(directory="static"),
+    StaticFiles(directory=STATIC_FOLDER),
     name="static"
 )
 
 templates = Jinja2Templates(
-    directory="templates"
+    directory=TEMPLATE_FOLDER
 )
 
 
-HF_TOKEN = os.getenv("HF_TOKEN")
+# =========================================================
+# FONT
+# =========================================================
 
-if not HF_TOKEN:
-    raise RuntimeError("HF_TOKEN not found in .env file")
+def get_font(size, bold=False):
+
+    if bold:
+        font_paths = [
+            "C:/Windows/Fonts/arialbd.ttf",
+            "C:/Windows/Fonts/calibrib.ttf"
+        ]
+    else:
+        font_paths = [
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/calibri.ttf"
+        ]
+
+    for font_path in font_paths:
+
+        if os.path.exists(font_path):
+
+            try:
+                return ImageFont.truetype(
+                    font_path,
+                    size
+                )
+            except Exception:
+                pass
+
+    return ImageFont.load_default()
 
 
-client = InferenceClient(
-    api_key=HF_TOKEN,
-    provider="auto"
-)
-
+# =========================================================
+# DELETE OLD PANELS
+# =========================================================
 
 def delete_old_images():
 
-    os.makedirs(
-        "static/images",
-        exist_ok=True
-    )
-
     for index in range(1, 6):
 
-        file_path = f"static/images/panel_{index}.png"
+        file_path = os.path.join(
+            IMAGE_FOLDER,
+            f"panel_{index}.png"
+        )
 
         if os.path.exists(file_path):
-
             os.remove(file_path)
 
-            print(
-                f"Deleted old Panel {index}"
-            )
 
+# =========================================================
+# CREATE STORY
+# =========================================================
 
 def create_story(
     story_prompt,
@@ -66,9 +99,8 @@ def create_story(
     art_style
 ):
 
-    return f"""
-COMICCRAFT – {character_name}'S ADVENTURE
-==========================================
+    story = f"""
+COMICCRAFT - {character_name}'S ADVENTURE
 
 STORY IDEA:
 {story_prompt}
@@ -86,78 +118,301 @@ ART STYLE:
 {art_style}
 
 
-PANEL 1 – THE BEGINNING 🌟
+PANEL 1 - THE BEGINNING
 
-Scene:
-{character_name} begins an exciting adventure in the {setting}.
-The events are connected directly to this story idea:
+{character_name} begins an exciting adventure
+in the {setting}.
 
-{story_prompt}
-
-Dialogue:
-"{character_name}: Something tells me this adventure is only beginning..."
-
-Narration:
-A mysterious journey begins, and {character_name} is ready to discover what lies ahead.
+"{character_name}: Something tells me this
+adventure is only beginning..."
 
 
-PANEL 2 – THE DISCOVERY 🔮
+PANEL 2 - THE DISCOVERY
 
-Scene:
-While exploring the {setting}, {character_name} discovers something unexpected
-that is connected to the main story.
+While exploring the {setting},
+{character_name} discovers something unexpected.
 
-Dialogue:
-"{character_name}: What is this? There must be something important behind it."
-
-Narration:
-The discovery reveals that the adventure is much bigger than expected.
+"{character_name}: What is this?
+There must be something important here."
 
 
-PANEL 3 – THE DANGER 👹
+PANEL 3 - THE DANGER
 
-Scene:
-A dangerous obstacle, enemy, or mysterious force appears in the {setting}.
-{character_name} must face the danger and protect what matters.
+A dangerous obstacle appears in the {setting}.
+{character_name} must face the danger.
 
-Dialogue:
-"{character_name}: I won't run away. I'll face this!"
-
-Narration:
-The peaceful adventure suddenly becomes a dangerous challenge.
+"{character_name}: I won't run away.
+I'll face this!"
 
 
-PANEL 4 – THE BATTLE ⚔️
+PANEL 4 - THE BATTLE
 
-Scene:
-{character_name} uses courage, intelligence, and determination to overcome
-the danger and move closer to solving the mystery.
+{character_name} uses courage and intelligence
+to overcome the danger.
 
-Dialogue:
-"{character_name}: This is my chance. I have to keep going!"
-
-Narration:
-After a difficult struggle, {character_name} finally gains the upper hand.
+"{character_name}: I have to keep going!"
 
 
-PANEL 5 – THE ENDING 🌅
+PANEL 5 - THE ENDING
 
-Scene:
-The main conflict is resolved. The {setting} becomes peaceful again,
-and {character_name} discovers the meaning of the adventure.
+The conflict is resolved.
+The {setting} becomes peaceful again.
 
-Dialogue:
-"{character_name}: We did it... but I feel like this isn't the end."
-
-Narration:
-The adventure ends with hope, leaving the door open for a new journey.
+"{character_name}: We did it...
+but this isn't the end."
 
 
 END OF COMIC
-============
-Created with ComicCraft AI.
 """
 
+    return story
+
+
+# =========================================================
+# CREATE ONE COMIC PANEL
+# =========================================================
+
+def create_single_panel(
+    index,
+    title,
+    character_name,
+    setting,
+    tone,
+    art_style,
+    scene_description
+):
+
+    width = 1200
+    height = 800
+
+    image = Image.new(
+        "RGB",
+        (width, height),
+        "white"
+    )
+
+    draw = ImageDraw.Draw(image)
+
+    # -----------------------------------------------------
+    # OUTER BORDER
+    # -----------------------------------------------------
+
+    draw.rectangle(
+        [10, 10, width - 10, height - 10],
+        outline="black",
+        width=8
+    )
+
+    # -----------------------------------------------------
+    # TITLE BOX
+    # -----------------------------------------------------
+
+    title_font = get_font(
+        42,
+        bold=True
+    )
+
+    draw.rectangle(
+        [30, 30, width - 30, 130],
+        outline="black",
+        width=4
+    )
+
+    draw.text(
+        (60, 55),
+        f"PANEL {index} - {title}",
+        fill="black",
+        font=title_font
+    )
+
+    # -----------------------------------------------------
+    # MAIN SCENE
+    # -----------------------------------------------------
+
+    draw.rectangle(
+        [50, 160, width - 50, 570],
+        outline="black",
+        width=5
+    )
+
+    # -----------------------------------------------------
+    # GROUND
+    # -----------------------------------------------------
+
+    draw.line(
+        [(70, 500), (1130, 500)],
+        fill="black",
+        width=6
+    )
+
+    # -----------------------------------------------------
+    # SUN
+    # -----------------------------------------------------
+
+    draw.ellipse(
+        [900, 200, 1030, 330],
+        outline="black",
+        width=6
+    )
+
+    # -----------------------------------------------------
+    # CHARACTER
+    # -----------------------------------------------------
+
+    character_x = 400
+    character_y = 300
+
+    # Head
+
+    draw.ellipse(
+        [
+            character_x - 60,
+            character_y - 60,
+            character_x + 60,
+            character_y + 60
+        ],
+        outline="black",
+        width=7
+    )
+
+    # Body
+
+    draw.line(
+        [
+            (character_x, character_y + 60),
+            (character_x, character_y + 230)
+        ],
+        fill="black",
+        width=8
+    )
+
+    # Left arm
+
+    draw.line(
+        [
+            (character_x, character_y + 100),
+            (character_x - 100, character_y + 160)
+        ],
+        fill="black",
+        width=8
+    )
+
+    # Right arm
+
+    draw.line(
+        [
+            (character_x, character_y + 100),
+            (character_x + 100, character_y + 160)
+        ],
+        fill="black",
+        width=8
+    )
+
+    # Left leg
+
+    draw.line(
+        [
+            (character_x, character_y + 230),
+            (character_x - 80, character_y + 340)
+        ],
+        fill="black",
+        width=8
+    )
+
+    # Right leg
+
+    draw.line(
+        [
+            (character_x, character_y + 230),
+            (character_x + 80, character_y + 340)
+        ],
+        fill="black",
+        width=8
+    )
+
+    # -----------------------------------------------------
+    # INFORMATION
+    # -----------------------------------------------------
+
+    small_font = get_font(
+        28,
+        bold=True
+    )
+
+    draw.text(
+        (650, 350),
+        f"Setting: {setting}",
+        fill="black",
+        font=small_font
+    )
+
+    draw.text(
+        (650, 400),
+        f"Style: {art_style}",
+        fill="black",
+        font=small_font
+    )
+
+    draw.text(
+        (650, 450),
+        f"Tone: {tone}",
+        fill="black",
+        font=small_font
+    )
+
+    # -----------------------------------------------------
+    # DESCRIPTION BOX
+    # -----------------------------------------------------
+
+    draw.rectangle(
+        [50, 600, width - 50, 750],
+        outline="black",
+        width=4
+    )
+
+    description_font = get_font(24)
+
+    wrapped_text = textwrap.fill(
+        scene_description,
+        width=80
+    )
+
+    draw.multiline_text(
+        (75, 625),
+        wrapped_text,
+        fill="black",
+        font=description_font,
+        spacing=8
+    )
+
+    # -----------------------------------------------------
+    # HERO NAME
+    # -----------------------------------------------------
+
+    draw.text(
+        (700, 700),
+        f"Hero: {character_name}",
+        fill="black",
+        font=small_font
+    )
+
+    # -----------------------------------------------------
+    # SAVE IMAGE
+    # -----------------------------------------------------
+
+    file_path = os.path.join(
+        IMAGE_FOLDER,
+        f"panel_{index}.png"
+    )
+
+    image.save(file_path)
+
+    return f"/static/images/panel_{index}.png"
+
+
+# =========================================================
+# CREATE ALL PANELS
+# =========================================================
 
 def create_panel_images(
     character_name,
@@ -169,123 +424,69 @@ def create_panel_images(
     delete_old_images()
 
     panels = [
-
         (
-            "The Beginning",
-            f"{character_name} enters the {setting} and begins an exciting adventure."
+            "THE BEGINNING",
+            f"{character_name} enters the {setting} "
+            f"and begins an exciting adventure."
         ),
-
         (
-            "The Discovery",
-            f"{character_name} discovers a mysterious secret inside the {setting}."
+            "THE DISCOVERY",
+            f"{character_name} discovers a mysterious "
+            f"secret inside the {setting}."
         ),
-
         (
-            "The Danger",
-            f"A dangerous mysterious creature appears and threatens the {setting}. "
+            "THE DANGER",
+            f"A dangerous creature appears in the {setting}. "
             f"{character_name} bravely faces the danger."
         ),
-
         (
-            "The Battle",
-            f"{character_name} fights the danger and protects the {setting}."
+            "THE BATTLE",
+            f"{character_name} fights the danger "
+            f"and protects the {setting}."
         ),
-
         (
-            "The Ending",
-            f"The danger is defeated. {character_name} stands peacefully inside "
-            f"the beautiful {setting}."
+            "THE ENDING",
+            f"The danger is defeated. "
+            f"{character_name} stands peacefully "
+            f"inside the beautiful {setting}."
         )
-
     ]
 
     image_paths = []
 
-    for index, (scene_title, scene_description) in enumerate(
+    for index, panel in enumerate(
         panels,
         start=1
     ):
 
-        prompt = f"""
-Create ONE professional comic-book illustration.
+        title = panel[0]
+        description = panel[1]
 
-Character:
-{character_name}
+        path = create_single_panel(
+            index=index,
+            title=title,
+            character_name=character_name,
+            setting=setting,
+            tone=tone,
+            art_style=art_style,
+            scene_description=description
+        )
 
-Setting:
-{setting}
+        image_paths.append(path)
 
-Tone:
-{tone}
-
-Art Style:
-{art_style}
-
-Panel:
-{scene_title}
-
-Scene:
-{scene_description}
-
-Visual requirements:
-
-- One single comic illustration.
-- Full scene composition.
-- Character clearly visible.
-- Detailed environment.
-- Cinematic lighting.
-- Vibrant colors.
-- High-quality comic artwork.
-- Expressive character.
-- Consistent character appearance.
-- Adventure comic style.
-- Dynamic composition.
-- No multiple panels.
-- No speech bubbles.
-- No captions.
-- No written words.
-- No logos.
-- No watermark.
-"""
-
-        try:
-
-            image = client.text_to_image(
-                prompt=prompt,
-                model="black-forest-labs/FLUX.1-schnell"
-            )
-
-            file_path = (
-                f"static/images/panel_{index}.png"
-            )
-
-            image.save(file_path)
-
-            image_paths.append(
-                f"/static/images/panel_{index}.png"
-            )
-
-            print(
-                f"Panel {index} SUCCESS"
-            )
-
-        except Exception as error:
-
-            print(
-                type(error).__name__
-            )
-
-            print(
-                str(error)
-            )
-
-            raise
+        print(
+            f"Panel {index} created successfully"
+        )
 
     return image_paths
 
 
+# =========================================================
+# HOME
+# =========================================================
+
 @app.get("/")
-def home(request: Request):
+async def home(request: Request):
 
     return templates.TemplateResponse(
         request=request,
@@ -296,36 +497,53 @@ def home(request: Request):
     )
 
 
+# =========================================================
+# GENERATE COMIC
+# =========================================================
+
 @app.post("/generate")
 async def generate(request: Request):
 
     form_data = await request.form()
 
-    story_prompt = form_data.get(
-        "story_prompt",
-        ""
+    story_prompt = str(
+        form_data.get(
+            "story_prompt",
+            "A mysterious adventure"
+        )
     ).strip()
 
-    character_name = form_data.get(
-        "character_name",
-        "Hero"
+    character_name = str(
+        form_data.get(
+            "character_name",
+            "Hero"
+        )
     ).strip()
 
-    setting = form_data.get(
-        "setting",
-        "Enchanted Forest"
+    setting = str(
+        form_data.get(
+            "setting",
+            "Enchanted Forest"
+        )
     ).strip()
 
-    tone = form_data.get(
-        "tone",
-        "Adventure"
+    tone = str(
+        form_data.get(
+            "tone",
+            "Adventure"
+        )
     ).strip()
 
-    art_style = form_data.get(
-        "art_style",
-        "Comic Book"
+    art_style = str(
+        form_data.get(
+            "art_style",
+            "Comic Book"
+        )
     ).strip()
 
+    # -----------------------------------------------------
+    # CREATE STORY
+    # -----------------------------------------------------
 
     story = create_story(
         story_prompt,
@@ -335,6 +553,9 @@ async def generate(request: Request):
         art_style
     )
 
+    # -----------------------------------------------------
+    # CREATE PANELS
+    # -----------------------------------------------------
 
     try:
 
@@ -353,7 +574,7 @@ async def generate(request: Request):
             context={
                 "request": request,
                 "error": (
-                    f"Image Generation Error: "
+                    f"Comic Generation Error: "
                     f"{type(error).__name__}: {error}"
                 ),
                 "story_prompt": story_prompt,
@@ -364,6 +585,9 @@ async def generate(request: Request):
             }
         )
 
+    # -----------------------------------------------------
+    # SHOW RESULT
+    # -----------------------------------------------------
 
     return templates.TemplateResponse(
         request=request,
@@ -378,114 +602,4 @@ async def generate(request: Request):
             "tone": tone,
             "art_style": art_style
         }
-    )
-
-
-@app.post("/download-pdf")
-async def download_pdf(request: Request):
-
-    form_data = await request.form()
-
-    story = form_data.get(
-        "story",
-        ""
-    ).strip()
-
-
-    pdf = FPDF()
-
-    pdf.add_page()
-
-    pdf.set_font(
-        "Helvetica",
-        "B",
-        20
-    )
-
-    pdf.cell(
-        0,
-        15,
-        "ComicCraft",
-        ln=True,
-        align="C"
-    )
-
-    pdf.set_font(
-        "Helvetica",
-        "B",
-        14
-    )
-
-    pdf.cell(
-        0,
-        10,
-        "AI Comic Story Creator",
-        ln=True,
-        align="C"
-    )
-
-    pdf.ln(8)
-
-
-    for index in range(1, 6):
-
-        image_path = (
-            f"static/images/panel_{index}.png"
-        )
-
-        if os.path.exists(image_path):
-
-            pdf.image(
-                image_path,
-                x=15,
-                w=180
-            )
-
-            pdf.ln(5)
-
-
-    pdf.add_page()
-
-    pdf.set_font(
-        "Helvetica",
-        "B",
-        14
-    )
-
-    pdf.cell(
-        0,
-        10,
-        "Comic Story",
-        ln=True
-    )
-
-    pdf.ln(5)
-
-    pdf.set_font(
-        "Helvetica",
-        size=10
-    )
-
-    safe_story = (
-        story
-        .encode("latin-1", "replace")
-        .decode("latin-1")
-    )
-
-    pdf.multi_cell(
-        0,
-        7,
-        safe_story
-    )
-
-
-    file_path = "comiccraft_story.pdf"
-
-    pdf.output(file_path)
-
-
-    return FileResponse(
-        file_path,
-        media_type="application/pdf",
-        filename="ComicCraft_Story.pdf"
     )
