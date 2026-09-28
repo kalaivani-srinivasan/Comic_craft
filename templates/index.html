@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>ComicCraft - AI Comic Story Creator</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #f3e8ff, #e0e7ff);
+            color: #24113d;
+        }
+
+        .container {
+            width: min(1100px, 92%);
+            margin: 40px auto;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .hero h1 {
+            font-size: 42px;
+            margin-bottom: 8px;
+            color: #6d28d9;
+        }
+
+        .hero p {
+            color: #5b4b73;
+            font-size: 17px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(70, 30, 110, 0.12);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            color: #6d28d9;
+        }
+
+        label {
+            display: block;
+            margin-top: 18px;
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            padding: 13px 15px;
+            border: 2px solid #e5d5ff;
+            border-radius: 12px;
+            font-size: 15px;
+            outline: none;
+            background: #faf7ff;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            border-color: #8b5cf6;
+        }
+
+        .generate-btn,
+        .pdf-btn {
+            border: none;
+            border-radius: 12px;
+            padding: 14px 22px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 22px;
+        }
+
+        .generate-btn {
+            width: 100%;
+            background: #7c3aed;
+            color: white;
+        }
+
+        .generate-btn:hover {
+            background: #6d28d9;
+        }
+
+        .pdf-btn {
+            background: #111827;
+            color: white;
+        }
+
+        .pdf-btn:hover {
+            background: #000000;
+        }
+
+        .error {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+            color: #991b1b;
+            padding: 18px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .panels-title {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .panels-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 22px;
+        }
+
+        .panel-card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 14px;
+            box-shadow: 0 8px 25px rgba(70, 30, 110, 0.12);
+            overflow: hidden;
+        }
+
+        .panel-card:last-child {
+            grid-column: 1 / -1;
+            max-width: 550px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .panel-number {
+            font-size: 18px;
+            font-weight: bold;
+            color: #6d28d9;
+            margin-bottom: 10px;
+        }
+
+        .panel-card img {
+            width: 100%;
+            display: block;
+            border-radius: 12px;
+        }
+
+        .story-box {
+            background: #faf7ff;
+            border-radius: 14px;
+            padding: 20px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+
+        .footer {
+            text-align: center;
+            color: #6b5b7b;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 750px) {
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .panels-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .panel-card:last-child {
+                grid-column: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="hero">
+        <h1>🎨 ComicCraft</h1>
+        <p>Create your own AI-powered comic story</p>
+    </div>
+
+
+    {% if error %}
+    <div class="error">
+        <strong>⚠️ Generation Error</strong>
+
+        <br><br>
+
+        {{ error }}
+    </div>
+    {% endif %}
+
+
+    <div class="card">
+
+        <h2>✨ Create Your Comic</h2>
+
+        <form action="/generate" method="post">
+
+            <label for="story_prompt">
+                Story Idea
+            </label>
+
+            <textarea
+                id="story_prompt"
+                name="story_prompt"
+                placeholder="Describe your comic story idea..."
+                required
+            >{{ story_prompt | default('') }}</textarea>
+
+
+            <label for="character_name">
+                Character Name
+            </label>
+
+            <input
+                id="character_name"
+                type="text"
+                name="character_name"
+                value="{{ character_name | default('') }}"
+                placeholder="Example: Kalai"
+                required
+            >
+
+
+            <label for="setting">
+                Setting
+            </label>
+
+            <input
+                id="setting"
+                type="text"
+                name="setting"
+                value="{{ setting | default('') }}"
+                placeholder="Example: Enchanted Forest"
+                required
+            >
+
+
+            <label for="tone">
+                Tone
+            </label>
+
+            <select id="tone" name="tone">
+
+                <option value="Adventure"
+                    {% if tone == "Adventure" %}selected{% endif %}>
+                    Adventure
+                </option>
+
+                <option value="Funny"
+                    {% if tone == "Funny" %}selected{% endif %}>
+                    Funny
+                </option>
+
+                <option value="Mystery"
+                    {% if tone == "Mystery" %}selected{% endif %}>
+                    Mystery
+                </option>
+
+                <option value="Fantasy"
+                    {% if tone == "Fantasy" %}selected{% endif %}>
+                    Fantasy
+                </option>
+
+                <option value="Sci-Fi"
+                    {% if tone == "Sci-Fi" %}selected{% endif %}>
+                    Sci-Fi
+                </option>
+
+            </select>
+
+
+            <label for="art_style">
+                Art Style
+            </label>
+
+            <select id="art_style" name="art_style">
+
+                <option value="Comic Book"
+                    {% if art_style == "Comic Book" %}selected{% endif %}>
+                    Comic Book
+                </option>
+
+                <option value="Anime"
+                    {% if art_style == "Anime" %}selected{% endif %}>
+                    Anime
+                </option>
+
+                <option value="Manga"
+                    {% if art_style == "Manga" %}selected{% endif %}>
+                    Manga
+                </option>
+
+                <option value="Cartoon"
+                    {% if art_style == "Cartoon" %}selected{% endif %}>
+                    Cartoon
+                </option>
+
+                <option value="Cinematic"
+                    {% if art_style == "Cinematic" %}selected{% endif %}>
+                    Cinematic
+                </option>
+
+            </select>
+
+
+            <button
+                type="submit"
+                class="generate-btn"
+            >
+                🚀 Generate Comic
+            </button>
+
+        </form>
+
+    </div>
+
+
+    {% if image_paths %}
+
+    <div class="card">
+
+        <h2 class="panels-title">
+            🖼️ Your Comic Panels
+        </h2>
+
+        <div class="panels-grid">
+
+            {% for image in image_paths %}
+
+            <div class="panel-card">
+
+                <div class="panel-number">
+                    Panel {{ loop.index }}
+                </div>
+
+                <img
+                    src="{{ image }}?v={{ loop.index }}"
+                    alt="Comic Panel {{ loop.index }}"
+                >
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+
+    {% if story %}
+
+    <div class="card">
+
+        <h2>📖 Comic Story</h2>
+
+        <div class="story-box">
+            {{ story }}
+        </div>
+
+
+        <form
+            action="/download-pdf"
+            method="post"
+        >
+
+            <input
+                type="hidden"
+                name="story"
+                value="{{ story }}"
+            >
+
+            <button
+                type="submit"
+                class="pdf-btn"
+            >
+                📄 Download Comic PDF
+            </button>
+
+        </form>
+
+    </div>
+
+    {% endif %}
+
+
+    <div class="footer">
+        Made with ❤️ using ComicCraft AI
+    </div>
+
+</div>
+
+</body>
+</html>
